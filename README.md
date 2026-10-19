@@ -1,5 +1,7 @@
 # LHC Beam Simulator
 
+**[Launch the browser lab](https://qsolkcb.github.io/LHC/)**
+
 An interactive, educational illustration of the Large Hadron Collider beam cycle.
 The supplied Fable design is kept as a single HTML file with embedded CSS and
 JavaScript: no build step, runtime dependencies, or Rust runtime yet.
