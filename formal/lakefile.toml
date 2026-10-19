@@ -1,0 +1,13 @@
+name = "lhc_formal"
+version = "0.1.0"
+defaultTargets = ["LHC", "conformance"]
+
+[leanOptions]
+warningAsError = true
+
+[[lean_lib]]
+name = "LHC"
+
+[[lean_exe]]
+name = "conformance"
+root = "Conformance"

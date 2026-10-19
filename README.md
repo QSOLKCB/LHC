@@ -1,7 +1,8 @@
 # LHC Beam Simulator
 
 **[Launch the browser lab](https://qsolkcb.github.io/LHC/)** ·
-[Release notes](RELEASE-NOTES.md) · [CPU runtime contract](docs/CPU-RUNTIME.md)
+[Release notes](RELEASE-NOTES.md) · [CPU runtime contract](docs/CPU-RUNTIME.md) ·
+[Lean formalization](docs/FORMALIZATION.md)
 
 An educational collider lab with two independent ways to explore a simplified
 beam cycle:
@@ -108,6 +109,13 @@ results are accepted. See the [recorded evidence](tests/fixtures/cpu-v1/verifica
 physical LHC digital twin, or source of measured physics results.**
 
 ## Tests and CI
+
+An additive [Lean 4 specification](docs/FORMALIZATION.md) proves selected native
+control, clock, CPU-partition and canonical-word contracts. It includes a pinned,
+dependency-free proof build, axiom audit, source-drift gate and executable
+Lean/Rust conformance checks. Its guarantees apply to the documented model;
+floating-point physics, browser behaviour and complete Rust refinement remain
+outside the proof boundary.
 
 ```sh
 cargo fmt --all -- --check
