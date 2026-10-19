@@ -1,0 +1,41 @@
+name: Lean formalization
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  formal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install pinned official Lean distribution
+        shell: bash
+        run: |
+          test "$(cat formal/lean-toolchain)" = 'leanprover/lean4:v4.19.0'
+          curl --fail --location --retry 3 \
+            https://github.com/leanprover/lean4/releases/download/v4.19.0/lean-4.19.0-linux.tar.zst \
+            --output "$RUNNER_TEMP/lean.tar.zst"
+          echo "6fe3ce97a58f44e2b3567d455b994eacec5bfe9ae7774f2a573444480ba813fe  $RUNNER_TEMP/lean.tar.zst" | sha256sum --check
+          tar --no-same-owner --zstd -xf "$RUNNER_TEMP/lean.tar.zst" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/lean-4.19.0-linux/bin" >> "$GITHUB_PATH"
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.90.0 --profile minimal
+      - name: Check reviewed source bindings
+        run: python3 formal/check_source.py
+      - name: Build proofs and executable model
+        working-directory: formal
+        run: lake build
+      - name: Audit theorem axioms
+        working-directory: formal
+        run: lake env lean -DwarningAsError=true Audit.lean
+      - name: Compare Lean with the actual Rust runtime
+        run: python3 formal/check_conformance.py

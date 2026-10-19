@@ -1,0 +1,51 @@
+{
+  "schema": "lhc-lean-local-verification-v1",
+  "date": "2026-10-19",
+  "baseline_commit": "aa69d32bea81e3bdac088ab34670b5dc1a1c589a",
+  "scope": "Kernel-checked model theorems plus finite Rust correspondence; not whole-repository verification.",
+  "toolchains": {
+    "lean": "4.19.0 (6caaee842e94)",
+    "rust": "1.90.0",
+    "target": "Linux x86_64"
+  },
+  "results": {
+    "lake_build": "pass",
+    "named_theorems": 47,
+    "audited_theorems_including_generated": 160,
+    "allowed_axioms": [
+      "propext",
+      "Quot.sound",
+      "Classical.choice"
+    ],
+    "explicit_axiom_negative_probe": "rejected",
+    "native_decide_negative_probe": "rejected",
+    "source_bindings": 7,
+    "source_drift_negative_probe": "rejected",
+    "lean_rust_matching_rows": 6422,
+    "rust_library_tests": 18,
+    "rust_cli_tests": 4,
+    "node_tests": 8,
+    "rustfmt": "pass",
+    "clippy_warnings_denied": "pass",
+    "retained_v0_1_0_receipt_replay": "full canonical state matches"
+  },
+  "local_environment_note": "The sandbox exposes /proc/self/exe but not /proc/<namespace-pid>/exe. Local Lean execution used a readlink compatibility shim only for same-process executable discovery. Official Lean distribution and proof sources were unchanged. The GitHub workflow uses the official checksum-pinned distribution without this local shim.",
+  "sha256": {
+    ".github/workflows/formal.yml": "e685250a359287ceb95a48eeee568f16df07a5909c598aa4297881593dc97c98",
+    "docs/FORMALIZATION.md": "3f0afd807d9dba0ca725130728975b4af1efec776fe1a956162c22d0fb5d34a4",
+    "formal/Audit.lean": "c905e50439028216d8a5d585451b789aad5f118c0c90c374b4bbe390b5642ddd",
+    "formal/Conformance.lean": "16f0a7c88584f7177403dbdb6ce95b978230a3d70c0748dd6ce9a2a7761ddbd1",
+    "formal/LHC/Canonical.lean": "1f3cd1e7cf07ad3528f1f8d6a8cc8df5875c566b28c9baf87dd50e89b907ffdb",
+    "formal/LHC/Clock.lean": "37de0c3ea663774a65f6bfc2ad9c2394889cfb34b2c3c240ad0ee57875ff56ae",
+    "formal/LHC/Control.lean": "f7793f657a44779c32985823aa532edbed0924bcf8eb993b08825c19308dd41e",
+    "formal/LHC/Partition.lean": "e6eb791e7db052a470c3eb77f54007984dc6848b3cf76ee4833ce7d932e643b9",
+    "formal/LHC.lean": "7ab8fadb62c0560a7b944bb9e11abc8a74bb2db79e8295e44cc3959742ab9006",
+    "formal/check_conformance.py": "fbc0ec1f71befce28877170b1496773ea3c122b7c23755a1d67f18ab4ee681ee",
+    "formal/check_source.py": "a94809f495ad011876ce4288c147fab556a9d28f5e573dba7bd5a4671cf65be0",
+    "formal/lake-manifest.json": "52f647dd40a6205be5069894426dcc1cacef7f7944dc9afee4dde6510ff631c1",
+    "formal/lakefile.toml": "04b15557c9c26c96f48488ca84529ce6a50a8b7c900f6c04ca3aeb4a9eb38d7a",
+    "formal/lean-toolchain": "55e97be96000b5e9e290c9e74482e5e317861499a5540353ce845471bded8cea",
+    "formal/source-manifest.json": "d8ba0925c19f03d3f4e63b141ee79502a3c0712c20846fa967c0b13405e87a81",
+    "runtime/examples/formal_conformance.rs": "c1f672089c5c2c4b459ebe7f81e454089548097ccdc5ef8ff1b856a5e296e677"
+  }
+}

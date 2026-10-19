@@ -1,0 +1,15 @@
+{
+  "schema": "lhc-lean-source-binding-v1",
+  "baseline_tag": "v0.1.0",
+  "baseline_commit": "aa69d32bea81e3bdac088ab34670b5dc1a1c589a",
+  "scope": "Native discrete contracts; index.html is bound for scope/provenance only, not verified.",
+  "sha256": {
+    "runtime/src/lib.rs": "73d1f735baea98305784c69aeebd5a68e20f8e25bd27e2dd3a0465254b092f00",
+    "runtime/src/main.rs": "2667f6141b7eafe21ee7cda296a40f4bf97b1cce4f3d6b40eaeeb71b46ebb6b4",
+    "runtime/Cargo.toml": "ae301ccd8714d8f3cfbb063e2838ac9c25b1ad902a279cb3dfc4caad11784452",
+    "Cargo.toml": "630e2c4d08521765a4da7d6d51786c31224fcf7f0f1764f0205f811f37393496",
+    "Cargo.lock": "c8275be0b0948de1b27c9e31765907ef63d3bc5f3f9dbf74e8c0b629f968c3a2",
+    "rust-toolchain.toml": "5597a94fc41b6f56313d195195fbeb63df9eb694cfe9fa5d0a8011c999e335ed",
+    "index.html": "72f4b55f8b1bdb6b11af730fec36c8793694b8360acbb09ae782976d679e85db"
+  }
+}
