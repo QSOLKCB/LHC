@@ -4,6 +4,7 @@
 [![CPU runtime](https://github.com/QSOLKCB/LHC/actions/workflows/runtime.yml/badge.svg?branch=main)](https://github.com/QSOLKCB/LHC/actions/workflows/runtime.yml)
 [![Lean formalization](https://github.com/QSOLKCB/LHC/actions/workflows/formal.yml/badge.svg?branch=main)](https://github.com/QSOLKCB/LHC/actions/workflows/formal.yml)
 [![Site checks](https://github.com/QSOLKCB/LHC/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/QSOLKCB/LHC/actions/workflows/pages.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23476232.svg)](https://doi.org/10.5281/zenodo.23476232)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
 
 **[Launch the browser lab](https://qsolkcb.github.io/LHC/)** ·
@@ -126,3 +127,12 @@ The native runtime arrived in [PR #2](https://github.com/QSOLKCB/LHC/pull/2);
 Lean formalization arrived in [PR #4](https://github.com/QSOLKCB/LHC/pull/4).
 The repository retains its [Apache-2.0 license](LICENSE). No donor source files
 or third-party Rust crates were imported.
+
+## Citation
+
+For the v0.2.0 archival record, use DOI
+[10.5281/zenodo.23476232](https://doi.org/10.5281/zenodo.23476232).
+
+> Slade, T. (2026). *LHC: An Educational Beam-Cycle Simulator with a Reproducible
+> CPU Runtime and Lean-Checked Contracts* (Version 0.2.0) [Computer software].
+> Zenodo. https://doi.org/10.5281/zenodo.23476232
