@@ -1,160 +1,128 @@
 # LHC Beam Simulator
 
+[![Release v0.2.0](https://img.shields.io/badge/release-v0.2.0-blue)](https://github.com/QSOLKCB/LHC/releases/tag/v0.2.0)
+[![CPU runtime](https://github.com/QSOLKCB/LHC/actions/workflows/runtime.yml/badge.svg?branch=main)](https://github.com/QSOLKCB/LHC/actions/workflows/runtime.yml)
+[![Lean formalization](https://github.com/QSOLKCB/LHC/actions/workflows/formal.yml/badge.svg?branch=main)](https://github.com/QSOLKCB/LHC/actions/workflows/formal.yml)
+[![Site checks](https://github.com/QSOLKCB/LHC/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/QSOLKCB/LHC/actions/workflows/pages.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
+
 **[Launch the browser lab](https://qsolkcb.github.io/LHC/)** ·
-[Release notes](RELEASE-NOTES.md) · [CPU runtime contract](docs/CPU-RUNTIME.md) ·
-[Lean formalization](docs/FORMALIZATION.md)
+[v0.2.0 release](https://github.com/QSOLKCB/LHC/releases/tag/v0.2.0) ·
+[Runtime contract](docs/CPU-RUNTIME.md) · [Formalization guide](docs/FORMALIZATION.md)
 
-An educational collider lab with two independent ways to explore a simplified
-beam cycle:
+An educational beam-cycle simulator with three complementary components:
 
-- **Browser lab:** the original Fable control-room design, rendered in one HTML
-  file with embedded CSS and JavaScript. No build step or JavaScript dependencies.
-- **CPU-only Rust runtime:** a dependency-free library and command-line runner
-  for deterministic, scripted beam cycles, full-state receipts and replay.
-  No CUDA or GPU backend. It does not drive the browser UI.
+- **Browser lab:** the original Fable control-room design in one HTML file with
+  embedded CSS and JavaScript. Interactive filling, ramp, squeeze, collision,
+  dump, pause/reset, and synthetic event displays.
+- **CPU-only Rust runtime:** a dependency-free library and CLI for fixed-step,
+  scripted beam cycles, complete-state receipts and exact replay. Scalar
+  execution is the reference; bounded CPU workers are optional.
+- **Lean verification layer:** a separately executable specification of selected
+  native control, clock, partition and canonical-word contracts, connected to
+  Rust by source bindings and conformance tests.
+
+The browser and native runtime are separate implementations. There is no GPU
+backend, telemetry, account requirement, live CERN data or operational control.
+
+## v0.2.0: Lean-checked contracts
+
+- **47 named theorems** with pinned Lean **4.19.0**, bundled `Std`, and no external
+  Lean packages or Mathlib dependency.
+- **160 audited theorem declarations**, including generated support; no admitted
+  proofs or `native_decide` proofs.
+- **6,422 matching Lean/Rust rows** in the verification corpus, including all
+  13 phases, 10 commands, both auto/pause settings, and 1/333/1000 ms timesteps.
+- Seven SHA-256 source bindings, an axiom audit, and dedicated CI using the
+  checksum-pinned official Lean distribution.
+
+The release adds verification infrastructure. Rust and Lean package versions
+remain `0.1.0`; runtime behaviour and the v0.1.0 evidence fixtures are preserved.
+See the [release notes](https://github.com/QSOLKCB/LHC/releases/tag/v0.2.0) and
+[retained verification record](formal/verification.json).
 
 ## Browser quickstart
 
-Open the [live lab](https://qsolkcb.github.io/LHC/), open `index.html` locally, or run:
+Open the [live lab](https://qsolkcb.github.io/LHC/) or `index.html` directly.
+To serve a local checkout:
 
 ```sh
 python3 -m http.server 8000
 ```
 
-Then visit `http://localhost:8000`. Optional Google Fonts requests are made when
-online; system fonts work offline. There is no telemetry, account, or live CERN
-data connection.
+Visit `http://localhost:8000`, then press **Inject**. Disable the sequencer for
+manual stages. Machine-clock speed and visible bunch-motion speed are separate;
+background tabs and low frame rates can slow active simulation time. Optional
+Google Fonts requests have system-font fallbacks.
 
-Press **Inject** to start. The sequencer runs injection, ramp, squeeze, adjustment,
-stable beams, dump and ramp-down automatically. Disable it for manual stage
-controls. **Pause simulation** freezes the clock and animation; **Reset** clears
-the current fill. Machine-clock speed and visible bunch-motion speed are separate.
-The clock follows active simulation time, so background tabs and low frame rates
-can slow it relative to wall time.
+## Native runtime quickstart
 
-## Rust quickstart
-
-With Rust/rustup installed, the checked-in toolchain file selects **Rust 1.90.0**.
-Run from the repository root:
+Install Rust/rustup; `rust-toolchain.toml` selects **Rust 1.90.0**. From the root:
 
 ```sh
-# Run 5000 fixed one-second steps; save the full-state receipt.
 cargo run --release --locked -- run --bunches 2808 --steps 5000 > fill.receipt
-
-# Recompute the recorded run and compare every canonical state word.
 cargo run --release --locked -- replay fill.receipt
-
-# Run bounded correctness-checked CPU benchmarks.
 cargo run --release --locked -- bench
 ```
 
-The default run enables sequencing and injects at step zero. Options include
-`--bunches`, `--dt-ms`, `--beta`, `--steps`, `--workers` and `--script`.
-A script replaces the default controls; each line is `STEP COMMAND`, for example:
+Options include `--bunches`, `--dt-ms`, `--beta`, `--steps`, `--workers`
+and `--script`. Configurations allow 1-3564 bunches, 1-1000 ms ticks, and
+beta-star 0.3-1.0 m. Scripts support inject, ramp, squeeze, collide, dump,
+pause/resume, reset and auto-on/off. See the [runtime contract](docs/CPU-RUNTIME.md)
+for command ordering, receipt semantics and bounds.
 
-```text
-0 auto-on
-0 inject
-100 pause
-200 resume
-300 dump
-```
+Scalar is the default. Recorded per-tick threading was slower; independent-scenario
+timings varied. These measurements establish no portable speedup.
+[Donor notes](docs/DONOR-NOTES.md) record the OPT, GALAXY and GLUBALL references;
+[historical fixtures](tests/fixtures/cpu-v1/) preserve the measured results.
 
-Save this as `controls.txt` and run:
+## Check the proofs and implementation
 
-```sh
-cargo run --release --locked -- run --steps 1500 --script controls.txt > scripted.receipt
-```
-
-The library exposes validated configuration, machine controls, fixed-tick
-stepping, observable snapshots and complete canonical state. Inputs are bounded
-at 1–3564 bunches per beam, 1–1000 ms per tick and beta-star 0.3–1.0 m; the CLI
-also bounds total steps, command count and input-file size. See the
-[runtime contract](docs/CPU-RUNTIME.md) for control timing and receipt semantics.
-
-### CPU techniques and performance
-
-Scalar execution is the default/reference. `--workers 4` explicitly opts into
-bounded scoped threads for independent per-bunch updates; luminosity reductions
-and dependent timesteps retain their sequential order. The benchmark also tests
-coarse parallel execution of independent scenarios.
-
-Contiguous intensity arrays, bounded partitions and full-output conformance checks
-are fresh adaptations of techniques from pinned **OPT, GLUBALL and GALAXY**
-revisions. [Donor notes](docs/DONOR-NOTES.md) explain their provenance and licenses.
-
-Measured per-tick threading was slower than scalar. Coarse scenario results varied
-from a gain to effectively tied on rerun. These shared-host measurements are not
-portable speedup claims. Both paths must pass full-state parity before benchmark
-results are accepted. See the [recorded evidence](tests/fixtures/cpu-v1/verification.json).
-
-## Model and limits
-
-- The browser shows two counter-rotating beams, four filling schemes, injection
-  and dump paths, and a schematic injector complex. Geometry is illustrative.
-- Beam energy, field/current, beta-star, luminosity, stored energy, pile-up,
-  collision accumulation and intensity loss are simplified educational readouts.
-- Browser collision events use synthetic categories, momenta, directions and
-  track shapes. They are not a conservation-constrained event generator; displayed
-  Higgs/W/Z candidate frequencies are not predictions.
-- The native runtime reuses the educational ramp/luminosity/burn-off equations
-  with explicitly simplified aggregate injection and dump timing. It omits
-  display geometry and random visual events. Whole-cycle browser/native parity
-  is not claimed.
-- Exact replay is scoped to the same source, toolchain, target and floating-point
-  environment. Receipts are reproducibility checks, not signatures or authenticity
-  proofs. Changing timestep can change numerical results.
-
-**This is not a validated accelerator simulation, operational control system,
-physical LHC digital twin, or source of measured physics results.**
-
-## Tests and CI
-
-An additive [Lean 4 specification](docs/FORMALIZATION.md) proves selected native
-control, clock, CPU-partition and canonical-word contracts. It includes a pinned,
-dependency-free proof build, axiom audit, source-drift gate and executable
-Lean/Rust conformance checks. Its guarantees apply to the documented model;
-floating-point physics, browser behaviour and complete Rust refinement remain
-outside the proof boundary.
+With Lean/elan, Rust/rustup, Python 3, and Node.js 22 or later installed:
 
 ```sh
+python3 formal/check_source.py
+cd formal
+lake build
+lake env lean -DwarningAsError=true Audit.lean
+cd ..
+python3 formal/check_conformance.py
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 node --test tests/*.test.cjs
 ```
 
-Use Node.js 22 or later. The initial runtime includes 18 core and 4 CLI tests;
-the browser has 8 dependency-free tests in a minimal DOM/canvas shell. Tests cover
-controls, bounds, phase transitions, pause/reset, replay/tamper rejection, formula
-conformance and full-state scalar/worker parity. They do not replace scientific
-validation or real-browser visual/accessibility checks.
+CI checks the proofs, source bindings, Rust comparison, 18 library tests,
+4 CLI tests, and 8 browser regressions. The runtime job also checks release
+replay and benchmark parity. Browser tests use DOM/canvas stubs; visual rendering
+and accessibility need separate validation.
 
-GitHub Actions checks the Rust runtime and browser separately on pull requests.
-The runtime workflow also runs release-mode replay and bounded benchmark parity.
-[Source-bound fixtures](tests/fixtures/cpu-v1/) retain local verification results,
-including negative and variable timing results.
+## Scope and limits
 
-## GitHub Pages
+**The Lean proofs apply to the documented mathematical model.** Finite Rust
+conformance tests and source hashes support correspondence; they do not establish
+complete Rust refinement, verified compilation, floating-point physics correctness,
+browser correctness, receipt-parser correctness, or cross-platform bit identity.
+The [formalization guide](docs/FORMALIZATION.md) states the exact assumptions.
 
-The site is live at **https://qsolkcb.github.io/LHC/**. The Pages workflow checks
-pull requests without deploying. Main-branch runs publish only `index.html` and
-`.nojekyll`; the Rust runner is not deployed as a service. Inline assets support
-the `/LHC/` project path without rewriting.
+Beam dynamics and event displays are educational approximations. Synthetic
+Higgs/W/Z candidates are not predicted physical event rates. Replay checks
+self-consistency on a fixed source/toolchain/platform; receipts and fingerprints
+are not signatures or authenticity proofs. Timestep changes can change results.
 
-For a fork, a repository administrator must select **Settings → Pages → Build and
-deployment → Source: GitHub Actions**. The workflow does not change repository
-security settings.
+**This is not a validated accelerator model, physical LHC digital twin,
+operational control system, or source of measured CERN results.**
 
-## Source and license
+## Deployment, provenance and license
 
-Imported from the user-supplied `lhc-simulation.zip` on 2026-10-19. Its SHA-256 was:
+The Pages workflow tests PRs without deploying. Successful main runs publish
+only `index.html` and `.nojekyll`; the Rust runtime is not deployed as a service.
+For forks, select GitHub Actions as the Pages build source.
 
-`790112340a00bc13eebbd866e250ade3d62de5f6bf96b9b352410cba2a422908`
-
-The original control-room artwork and single-file structure are preserved.
-Browser integration fixes sequencer resumption, clarifies illustrative event/clock
-semantics, adds pause/status accessibility, and supplies tests/deployment. The
-separate Rust runtime was added in [PR #2](https://github.com/QSOLKCB/LHC/pull/2).
-The repository's [Apache-2.0 license](LICENSE) is retained; no donor source files
-or third-party Rust crates are imported.
+The browser design originated in the supplied `lhc-simulation.zip`, with SHA-256
+`790112340a00bc13eebbd866e250ade3d62de5f6bf96b9b352410cba2a422908`.
+The native runtime arrived in [PR #2](https://github.com/QSOLKCB/LHC/pull/2);
+Lean formalization arrived in [PR #4](https://github.com/QSOLKCB/LHC/pull/4).
+The repository retains its [Apache-2.0 license](LICENSE). No donor source files
+or third-party Rust crates were imported.
