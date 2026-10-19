@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="An illustrative, interactive LHC beam-cycle simulator. Synthetic events, no live machine data.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LHC Beam Simulator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a control-room console. A "Page 1" status strip spans the top, the ring map is the dominant
+   panel on the left, and the instrument stack (operator controls, event display, beam parameters)
+   sits on the right and drops below the map at phone width. Dark by design: this is a vistar screen. */
+:root{
+  --bg:#070a12;
+  --panel:#0d1320;
+  --panel-2:#121a2a;
+  --line:#1e2940;
+  --fg:#d9e1ef;
+  --muted:#8391aa;
+  --b1:#4da8ff;      /* Beam 1, CERN convention: blue, clockwise */
+  --b2:#ff5f52;      /* Beam 2, CERN convention: red, counter-clockwise */
+  --amber:#f1b43c;
+  --green:#3ddc8a;
+  --violet:#b08cff;
+  --font-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px 28px;
+  min-height:100%;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.console{max-width:1440px;margin:0 auto;display:grid;gap:14px}
+
+/* ---- Page 1 strip ---- */
+.page1{
+  display:grid;grid-template-columns:auto 1fr;gap:10px 22px;align-items:center;
+  background:var(--panel);border:1px solid var(--line);padding:12px 16px;
+}
+.brand{display:flex;flex-direction:column;min-width:0}
+.brand h1{margin:0;font-family:var(--font-display);font-weight:700;font-size:30px;line-height:1;letter-spacing:.01em;text-wrap:balance}
+.brand small{color:var(--muted);font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-top:4px}
+.vistar{display:flex;flex-wrap:wrap;gap:8px 26px;align-items:center;justify-content:flex-end;min-width:0}
+.stat{display:flex;flex-direction:column;min-width:0}
+.stat .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--font-mono);font-size:19px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .v.b1{color:var(--b1)} .stat .v.b2{color:var(--b2)}
+.mode{
+  font-family:var(--font-display);font-weight:700;font-size:26px;line-height:1;letter-spacing:.03em;text-transform:uppercase;
+  padding:8px 12px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);white-space:nowrap;
+}
+.mode[data-tone="inject"]{color:var(--b1);border-color:color-mix(in srgb,var(--b1) 50%,transparent)}
+.mode[data-tone="ramp"]{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 50%,transparent)}
+.mode[data-tone="stable"]{color:#07130c;background:var(--green);border-color:var(--green)}
+.mode[data-tone="dump"]{color:#fff;background:#c8362b;border-color:#c8362b}
+
+/* ---- main grid ---- */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:14px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);min-width:0}
+.panel h2{
+  margin:0;padding:9px 14px;border-bottom:1px solid var(--line);
+  font-family:var(--font-display);font-weight:600;font-size:17px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg);
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px
+}
+.panel h2 span{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;color:var(--muted);font-weight:400;text-transform:none}
+.ringwrap{position:relative;width:100%;aspect-ratio:1/1;max-height:min(82vh,900px);max-width:100%;overflow:hidden;background:
+  radial-gradient(circle at 50% 50%,#0f1726 0%,var(--panel) 62%,#0a0f1a 100%)}
+.ringwrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.statusline{
+  display:flex;flex-wrap:wrap;gap:6px 18px;padding:8px 14px;border-top:1px solid var(--line);
+  font-family:var(--font-mono);font-size:11px;color:var(--muted)
+}
+.statusline b{color:var(--fg);font-weight:500;font-variant-numeric:tabular-nums}
+
+.stack{display:grid;gap:14px;min-width:0}
+
+/* ---- controls ---- */
+.controls{padding:12px 14px;display:grid;gap:12px}
+.btnrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+button{
+  font-family:var(--font-display);font-weight:600;font-size:16px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--fg);background:var(--panel-2);border:1px solid var(--line);padding:9px 6px;cursor:pointer;
+  transition:border-color .15s,background .15s,color .15s;min-width:0
+}
+button:hover:not(:disabled){border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.primary:not(:disabled){border-color:var(--amber);color:var(--amber)}
+button.go:not(:disabled){border-color:var(--green);color:var(--green)}
+button.danger:not(:disabled){border-color:#c8362b;color:#ff6b5e}
+button.wide{grid-column:1 / -1}
+.field{display:grid;grid-template-columns:118px minmax(0,1fr);gap:8px;align-items:center}
+.field label{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.field select,.field input[type=range]{width:100%;min-width:0}
+select{font-family:var(--font-mono);font-size:12px;color:var(--fg);background:var(--panel-2);border:1px solid var(--line);padding:6px 8px}
+input[type=range]{accent-color:var(--amber);height:22px;margin:0}
+.rangeval{font-family:var(--font-mono);font-size:11px;color:var(--fg);font-variant-numeric:tabular-nums;text-align:right;min-width:72px}
+.field.range{grid-template-columns:118px minmax(0,1fr) auto}
+.check{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.check input{accent-color:var(--green);width:15px;height:15px;margin:0}
+
+/* ---- cycle ladder ---- */
+.cycle{list-style:none;margin:0;padding:6px 0;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px;padding-inline:14px 14px;padding-block:10px}
+.cycle li{
+  font-family:var(--font-mono);font-size:9px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);
+  border-top:3px solid var(--line);padding-top:5px;line-height:1.2;min-width:0;letter-spacing:0;font-size:8.5px
+}
+.cycle li.done{border-color:color-mix(in srgb,var(--fg) 45%,transparent)}
+.cycle li.now{border-color:var(--amber);color:var(--fg)}
+.cycle li.now.stable{border-color:var(--green)}
+.cycle li.now.dump{border-color:#ff6b5e}
+
+/* ---- event display ---- */
+.evtwrap{position:relative;width:100%;aspect-ratio:1/1;max-width:100%;background:#060910}
+.evtwrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.evtcap{padding:8px 14px 10px;border-top:1px solid var(--line);font-family:var(--font-mono);font-size:11px;color:var(--muted);display:grid;gap:3px}
+.evtcap b{color:var(--fg);font-weight:500}
+.evtcap .tag{color:var(--violet)}
+
+/* ---- parameters ---- */
+.params{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:6px 0}
+.params > div{padding:7px 14px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);min-width:0}
+.params > div:nth-last-child(-n+2){border-bottom:0}
+.params .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block}
+.params .v{font-family:var(--font-mono);font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.params .u{font-size:11px;color:var(--muted);font-weight:400}
+
+.notes{padding:10px 14px;color:var(--muted);font-size:12.5px;max-width:72ch;display:grid;gap:6px}
+.notes p{margin:0}
+.notes .b1{color:var(--b1)} .notes .b2{color:var(--b2)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;color:var(--muted);padding:0 14px 10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;margin-right:6px}
+
+@media (max-width:980px){
+  .main{grid-template-columns:1fr}
+  .page1{grid-template-columns:1fr}
+  .vistar{justify-content:flex-start}
+  .ringwrap{max-height:none}
+}
+@media (max-width:480px){
+  .brand h1{font-size:25px}
+  .mode{font-size:21px}
+  .stat .v{font-size:16px}
+  .btnrow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .field,.field.range{grid-template-columns:1fr}
+  .field.range .rangeval{text-align:left}
+  .cycle{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:reduce){
+  button{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="console">
+
+  <header class="page1" aria-label="Machine status">
+    <div class="brand">
+      <h1>LHC Beam Simulator</h1>
+      <small>Large Hadron Collider · 26.659 km · pp at √s = 13.6 TeV</small>
+    </div>
+    <div class="vistar">
+      <div class="stat"><span class="k">Fill</span><span class="v" id="fillNo">10 421</span></div>
+      <div class="stat"><span class="k">Energy</span><span class="v" id="hdrE">0 GeV</span></div>
+      <div class="stat"><span class="k">I(B1)</span><span class="v b1" id="hdrI1">0.00e+00</span></div>
+      <div class="stat"><span class="k">I(B2)</span><span class="v b2" id="hdrI2">0.00e+00</span></div>
+      <div class="stat"><span class="k">Machine clock</span><span class="v" id="hdrClock">00:00:00</span></div>
+      <div class="mode" id="modeBox" role="status" aria-live="polite" data-tone="none">No beam</div>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="panel" aria-label="Ring map">
+      <h2>Ring map <span>plan view · LHC, SPS, PS, PSB drawn to scale</span></h2>
+      <div class="ringwrap"><canvas id="ring" aria-label="Animated plan view of the LHC ring with two circulating proton beams"></canvas></div>
+      <div class="statusline">
+        <span>Turn <b id="turnNo">0</b></span>
+        <span>Bunches B1 <b id="nb1">0</b> · B2 <b id="nb2">0</b></span>
+        <span>Bunch motion slowed <b id="slowFactor">×67 000</b></span>
+        <span id="stageMsg">Press Inject to start a fill.</span>
+      </div>
+    </section>
+
+    <div class="stack">
+      <section class="panel" aria-label="Operator controls">
+        <h2>Operator <span>CCC · LHC island</span></h2>
+        <ol class="cycle" id="cycle" aria-label="Nominal cycle">
+          <li data-m="INJECTION">Inject</li>
+          <li data-m="PREPARE RAMP">Prep ramp</li>
+          <li data-m="RAMP">Ramp</li>
+          <li data-m="FLAT TOP">Flat top</li>
+          <li data-m="SQUEEZE">Squeeze</li>
+          <li data-m="ADJUST">Adjust</li>
+          <li data-m="STABLE BEAMS">Stable</li>
+          <li data-m="BEAM DUMP">Dump</li>
+          <li data-m="RAMP DOWN">Ramp dn</li>
+        </ol>
+        <div class="controls">
+          <div class="btnrow">
+            <button id="btnInject" class="primary">Inject</button>
+            <button id="btnRamp" class="primary">Ramp</button>
+            <button id="btnSqueeze" class="primary">Squeeze</button>
+            <button id="btnCollide" class="go">Stable beams</button>
+            <button id="btnDump" class="danger">Dump</button>
+            <button id="btnReset">Reset</button>
+          </div>
+          <button id="btnPause" aria-pressed="false">Pause simulation</button>
+          <label class="check"><input type="checkbox" id="autoCycle" checked> Sequencer: run the full cycle automatically</label>
+          <div class="field">
+            <label for="scheme">Filling scheme</label>
+            <select id="scheme">
+              <option value="2808">25 ns · 2808 bunches</option>
+              <option value="1224">50 ns-like · 1224 bunches</option>
+              <option value="12">12 bunches</option>
+              <option value="1">Pilot · 1 bunch</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="betaTarget">β* target (IP1/5)</label>
+            <select id="betaTarget">
+              <option value="0.3">0.30 m</option>
+              <option value="0.6">0.60 m</option>
+              <option value="1.0">1.0 m</option>
+            </select>
+          </div>
+          <div class="field range">
+            <label for="clockSpeed">Machine clock</label>
+            <input type="range" id="clockSpeed" min="0" max="4" step="1" value="2">
+            <span class="rangeval" id="clockSpeedVal">×60</span>
+          </div>
+          <div class="field range">
+            <label for="bunchSpeed">Bunch motion</label>
+            <input type="range" id="bunchSpeed" min="0.03" max="0.6" step="0.01" value="0.17">
+            <span class="rangeval" id="bunchSpeedVal">0.17 turn/s</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Event display">
+        <h2>Illustrative event display <span>IP5 · transverse view · B = 3.8 T</span></h2>
+        <div class="evtwrap"><canvas id="evt" aria-label="Cross-section of a collision event in a general-purpose detector"></canvas></div>
+        <div class="evtcap">
+          <div><b id="evtTitle">No collisions</b> <span class="tag" id="evtTag"></span></div>
+          <div id="evtInfo">Collisions begin during Adjust; data-taking is declared at Stable Beams.</div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Beam parameters">
+        <h2>Beam parameters <span>live</span></h2>
+        <div class="params">
+          <div><span class="k">Beam energy</span><div class="v" id="pE">0 <span class="u">GeV</span></div></div>
+          <div><span class="k">Lorentz factor γ</span><div class="v" id="pGamma">–</div></div>
+          <div><span class="k">Speed</span><div class="v" id="pBeta">–</div></div>
+          <div><span class="k">Dipole field</span><div class="v" id="pB">0.00 <span class="u">T</span></div></div>
+          <div><span class="k">Dipole current</span><div class="v" id="pI">0 <span class="u">A</span></div></div>
+          <div><span class="k">Revolution freq.</span><div class="v">11 245.5 <span class="u">Hz</span></div></div>
+          <div><span class="k">β* at IP1/IP5</span><div class="v" id="pBeta*">11.0 <span class="u">m</span></div></div>
+          <div><span class="k">Beam size σ* at IP</span><div class="v" id="pSig">–</div></div>
+          <div><span class="k">Stored energy / beam</span><div class="v" id="pStored">0 <span class="u">MJ</span></div></div>
+          <div><span class="k">Protons / bunch</span><div class="v" id="pNb">1.15e11</div></div>
+          <div><span class="k">Luminosity (ATLAS/CMS)</span><div class="v" id="pLumi">0 <span class="u">cm⁻²s⁻¹</span></div></div>
+          <div><span class="k">Pile-up μ</span><div class="v" id="pMu">0</div></div>
+          <div><span class="k">Integrated lumi (fill)</span><div class="v" id="pLint">0.000 <span class="u">fb⁻¹</span></div></div>
+          <div><span class="k">pp collisions (fill)</span><div class="v" id="pColl">0</div></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="About this simulation">
+        <h2>About</h2>
+        <div class="legend">
+          <span><i style="background:var(--b1)"></i>Beam 1 · clockwise · injected at P2</span>
+          <span><i style="background:var(--b2)"></i>Beam 2 · counter-clockwise · injected at P8</span>
+        </div>
+        <div class="notes">
+          <p>Beam readouts use simplified accelerator relations: dipole field from B = p / (0.2998 ρ) with ρ = 2804 m, luminosity from the round-beam formula with a crossing-angle factor, pile-up from an 80 mb inelastic cross-section, and intensity burn-off from the collision rate.</p>
+          <p>Bunch motion on the map is slowed by about 10⁵ so that trains and the 3 µs abort gap are visible. The machine clock runs at the chosen multiple of real time, so a 20-minute ramp takes 20 seconds at ×60. Durations follow a typical Run 3 cycle.</p>
+          <p>This is an educational illustration, not a validated accelerator model or live CERN data. Event categories, rates and tracks are synthetic demonstrations; candidate frequencies are not physical predictions. Ring circumferences are scaled, but the layout is schematic.</p>
+          <p>Pure HTML, CSS and JavaScript. No libraries. Optional Google Fonts load when online. Pause freezes the simulation; the machine clock follows active simulation time and slows if the browser cannot keep up.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.getElementById(s);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ------------------------------------------------------------------ constants */
+const C_RING = 26658.883;        // m
+const F_REV = 11245.5;           // Hz
+const M_P = 0.938272;            // GeV
+const E_INJ = 450, E_TOP = 6800; // GeV
+const RHO = 2803.95;             // dipole bending radius, m
+const N_SLOTS = 3564;            // 25 ns RF buckets
+const N_B = 1.15e11;             // protons per bunch at injection
+const EPS_N = 2.5e-6;            // normalised emittance, m rad
+const SIGMA_Z = 0.075;           // bunch length, m
+const THETA_HALF = 160e-6;       // half crossing angle, rad
+const SIG_INEL = 80e-27, SIG_TOT = 111e-27; // cm²
+const BETA_INJ = 11;             // β* at injection, m
+const EV_J = 1.602176634e-19;
+const I_DIP_7TEV = 11850;        // A
+
+const DUR = { probe: 40, inj: 45, prep: 60, ramp: 1200, flat: 60, squeeze: 600, adjust: 120, rampdown: 1200, autoDumpAfter: 6*3600 };
+const CLOCKS = [1, 10, 60, 300, 1800];
+
+/* ------------------------------------------------------------------ ring geometry (metres) */
+const U_IP = i => (i - 1) / 8;               // ring fraction of Point i
+const RING = (() => {
+  const octant = C_RING / 8, Ls = 545, La = octant - Ls, Ra = La / (Math.PI / 4);
+  const M = 4096, pts = new Array(M);
+  // walk the octants: straight Ls/2, arc 45°, straight Ls/2 — start at Point 1 heading left (clockwise on screen)
+  let P = { x: 0, y: 0 }, h = Math.PI;
+  const octStart = [];
+  for (let k = 0; k < 8; k++) {
+    octStart.push({ x: P.x, y: P.y, h });
+    P = { x: P.x + Math.cos(h) * Ls / 2, y: P.y + Math.sin(h) * Ls / 2 };
+    const cx = P.x + Ra * Math.cos(h + Math.PI / 2), cy = P.y + Ra * Math.sin(h + Math.PI / 2);
+    h += Math.PI / 4;
+    P = { x: cx + Ra * Math.cos(h - Math.PI / 2), y: cy + Ra * Math.sin(h - Math.PI / 2) };
+    P = { x: P.x + Math.cos(h) * Ls / 2, y: P.y + Math.sin(h) * Ls / 2 };
+  }
+  for (let i = 0; i < M; i++) {
+    const s = i / M * C_RING, k = Math.floor(s / octant), so = s - k * octant, o = octStart[k];
+    let x, y, hh = o.h, straight = true;
+    if (so < Ls / 2) { x = o.x + Math.cos(hh) * so; y = o.y + Math.sin(hh) * so; }
+    else if (so < Ls / 2 + La) {
+      straight = false;
+      const sx = o.x + Math.cos(hh) * Ls / 2, sy = o.y + Math.sin(hh) * Ls / 2;
+      const cx = sx + Ra * Math.cos(hh + Math.PI / 2), cy = sy + Ra * Math.sin(hh + Math.PI / 2);
+      const th = (so - Ls / 2) / Ra;
+      x = cx + Ra * Math.cos(hh - Math.PI / 2 + th); y = cy + Ra * Math.sin(hh - Math.PI / 2 + th); hh += th;
+    } else {
+      hh += Math.PI / 4;
+      const nx = octStart[(k + 1) % 8] || octStart[0];
+      const d = (so - octant);
+      x = nx.x + Math.cos(hh) * d; y = nx.y + Math.sin(hh) * d;
+    }
+    pts[i] = { x, y, tx: Math.cos(hh), ty: Math.sin(hh), straight };
+  }
+  let cx = 0, cy = 0; for (const p of pts) { cx += p.x; cy += p.y; } cx /= M; cy /= M;
+  for (const p of pts) { p.x -= cx; p.y -= cy; }
+  let R = 0; for (const p of pts) R = Math.max(R, Math.hypot(p.x, p.y));
+  return { pts, M, R };
+})();
+function ringPos(u) {
+  u -= Math.floor(u);
+  const f = u * RING.M, i0 = Math.floor(f) % RING.M, i1 = (i0 + 1) % RING.M, t = f - Math.floor(f);
+  const a = RING.pts[i0], b = RING.pts[i1];
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, tx: a.tx + (b.tx - a.tx) * t, ty: a.ty + (b.ty - a.ty) * t };
+}
+// which beam runs on the outside: flips at the four experimental IPs
+const SIDE = [1, -1, -1, -1, 1, 1, 1, -1];
+const XING = [0, .125, .5, .875, 1];
+function sideFactor(u) {
+  u -= Math.floor(u);
+  const oct = Math.min(7, Math.floor(u * 8));
+  const w = 0.012;
+  for (const uc of XING) {
+    const dd = u - uc;
+    if (Math.abs(dd) < w) {
+      const after = SIDE[Math.floor(((uc + 1e-6) % 1) * 8)];
+      return after * Math.sin(dd / w * Math.PI / 2);
+    }
+  }
+  return SIDE[oct];
+}
+
+/* injector complex, metres, in ring coordinates (P1 is at the bottom) */
+const SPS = { x: 350, y: 2650, r: 6911.5 / (2 * Math.PI) };
+const PS = { x: -1150, y: 3650, r: 628.3 / (2 * Math.PI) };
+const PSB = { x: -1150 - 190, y: 3650 - 60, r: 157 / (2 * Math.PI) };
+const LINAC4 = { x1: -1150 - 420, y1: 3650 - 20, x2: -1150 - 334, y2: 3650 - 20 };
+
+/* ------------------------------------------------------------------ filling schemes */
+function buildScheme(n) {
+  const slots = [];
+  if (n === 1) return [[0]];                                   // one SPS "injection" of one bunch per beam
+  if (n === 12) return [Array.from({ length: 12 }, (_, i) => i * 297)]; // spaced around the ring
+  if (n === 1224) {                                             // 12 batches of 102 bunches, 50 ns-like spacing
+    const out = []; let s = 0;
+    for (let b = 0; b < 12; b++) { const batch = []; for (let i = 0; i < 102; i++) { batch.push(s); s += 2; } out.push(batch); s += 38; }
+    return out;
+  }
+  // 2808: 9 SPS batches of 3×72 and 3 of 4×72, 8 empty slots between PS trains, 38 between batches, abort gap at the end
+  const plan = [3, 4, 3, 3, 4, 3, 3, 4, 3, 3, 3, 3]; // 39 trains of 72 = 2808
+  let s = 0; const out = [];
+  for (const trains of plan) {
+    const batch = [];
+    for (let t = 0; t < trains; t++) { for (let i = 0; i < 72; i++) batch.push(s++); s += 8; }
+    s -= 8; s += 38; out.push(batch);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ simulation state */
+const S = {};
+function reset(keepFill) {
+  const fill = keepFill ? S.fill : 10421;
+  Object.assign(S, {
+    mode: 'NO BEAM', modeT: 0, tM: 0, phi: 0, fill,
+    E: 0, betaStar: BETA_INJ, lumi: 0, lint: 0, coll: 0, collideFrac: 0,
+    beams: [[], []], trains: [], pending: [], injTimer: 0, injStage: 'probe', fillingDone: false,
+    flashes: [], evtTimer: 0, lastEvt: null, dumpPhi: null, rampDownFrom: E_TOP, msg: 'Press Inject to start a fill.'
+  });
+  if (!keepFill) S.fill = 10421;
+}
+reset(false);
+
+function nb(i) { return S.beams[i].filter(b => b.state === 1).length; }
+function intensity(i) { let s = 0; for (const b of S.beams[i]) if (b.state === 1) s += b.N; return s; }
+function gammaOf(E) { return E / M_P; }
+function bunchPosU(beam, slot) { return beam === 0 ? slot / N_SLOTS + S.phi : -slot / N_SLOTS - S.phi; }
+function nextPhiAt(beam, slot, uTarget, after) { // phase at which bunch next passes uTarget
+  let base = beam === 0 ? uTarget - slot / N_SLOTS : -uTarget - slot / N_SLOTS;
+  base -= Math.floor(base);
+  let k = Math.ceil((after - base)); let p = base + k; if (p < after) p += 1;
+  return p;
+}
+
+/* ------------------------------------------------------------------ injections */
+function queueInjections(stage) {
+  const n = +$('scheme').value;
+  const batches = buildScheme(n);
+  S.pending = [];
+  if (stage === 'probe') {
+    S.pending.push({ beam: 0, slots: [0], N: 5e9, probe: true }, { beam: 1, slots: [0], N: 5e9, probe: true });
+  } else {
+    for (let b = 0; b < batches.length; b++) { S.pending.push({ beam: 0, slots: batches[b] }); S.pending.push({ beam: 1, slots: batches[b] }); }
+  }
+  S.injTimer = 0;
+}
+function fireInjection(req) {
+  const beam = req.beam, uInj = beam === 0 ? U_IP(2) : U_IP(8);
+  const head = Math.max(...req.slots);
+  const lead = Math.max(0.7 * S.bunchSpeed, 0.12); // ≥ ~0.7 s of travel in the transfer line
+  const phiHead = nextPhiAt(beam, head, uInj, S.phi + lead);
+  const existing = new Set(S.beams[beam].map(b => b.slot));
+  const bunches = [];
+  for (const slot of req.slots) {
+    if (existing.has(slot)) {
+      const b = S.beams[beam].find(x => x.slot === slot); b.N = req.N || N_B; continue;
+    }
+    const b = { slot, N: req.N || N_B, state: 0, phiIn: phiHead + (head - slot) / N_SLOTS, phiOut: null };
+    S.beams[beam].push(b); bunches.push(b);
+  }
+  S.trains.push({ beam, phi0: S.phi, phi1: phiHead, len: Math.max(0.01, req.slots.length / N_SLOTS), probe: !!req.probe });
+}
+function updateInjection(dtM, dtD) {
+  for (const beam of S.beams) for (const b of beam) if (b.state === 0 && S.phi >= b.phiIn) b.state = 1;
+  S.trains = S.trains.filter(t => S.phi < t.phi1 + t.len);
+  if (S.pending.length) {
+    S.injTimer -= dtM;
+    if (S.injTimer <= 0) { fireInjection(S.pending.shift()); S.injTimer = S.injStage === 'probe' ? DUR.probe : DUR.inj; }
+  } else if (S.trains.length === 0 && S.beams.every(bm => bm.every(b => b.state !== 0))) {
+    if (S.injStage === 'probe') { S.injStage = 'physics'; setMode('INJECTION PHYSICS BEAM'); S.msg = 'Injecting physics bunches from the SPS.'; queueInjections('physics'); }
+    else {
+      if (!S.fillingDone) { S.fillingDone = true; S.msg = 'Filling complete. Ready to ramp.'; }
+      if ($('autoCycle').checked) startRamp();
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ cycle */
+function setMode(m) { S.mode = m; S.modeT = 0; }
+function startInject() {
+  if (S.mode !== 'NO BEAM') return;
+  S.E = E_INJ; S.betaStar = BETA_INJ; S.injStage = 'probe'; S.fillingDone = false; S.lint = 0; S.coll = 0;
+  setMode('INJECTION PROBE BEAM'); queueInjections('probe'); S.msg = 'Injecting probe bunches from the SPS.';
+}
+function startRamp() { if (S.mode === 'INJECTION PHYSICS BEAM' && S.fillingDone) { setMode('PREPARE RAMP'); S.msg = 'Preparing ramp: RF capture and orbit checks.'; } }
+function startSqueeze() { if (S.mode === 'FLAT TOP') { setMode('SQUEEZE'); S.msg = 'Squeezing β* at IP1 and IP5.'; } }
+function startCollide() { if (S.mode === 'SQUEEZE' && S.modeT >= DUR.squeeze) { setMode('ADJUST'); S.msg = 'Collapsing separation bumps: beams into collision.'; } }
+function startDump() {
+  if (['NO BEAM', 'BEAM DUMP', 'RAMP DOWN'].includes(S.mode)) return;
+  setMode('BEAM DUMP'); S.dumpPhi = S.phi; S.rampDownFrom = S.E; S.msg = 'Beam dump: extraction kickers fired at Point 6.';
+  for (let i = 0; i < 2; i++) for (const b of S.beams[i]) {
+    if (b.state === 0) { b.state = 2; continue; }
+    b.phiOut = nextPhiAt(i, b.slot, U_IP(6), S.phi);
+  }
+  S.trains = []; S.pending = [];
+}
+const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+const auto = () => $('autoCycle').checked;
+
+function lumiAt(nColl, E, betaStar, Nb) {
+  if (nColl <= 0) return 0;
+  const g = gammaOf(E), sigStar = Math.sqrt(EPS_N * betaStar / g);
+  const F = 1 / Math.sqrt(1 + Math.pow(THETA_HALF * SIGMA_Z / sigStar, 2));
+  const L = Nb * Nb * nColl * F_REV * g / (4 * Math.PI * EPS_N * betaStar) * F; // m⁻² s⁻¹
+  return L * 1e-4; // cm⁻² s⁻¹
+}
+
+function update(dtReal) {
+  const clock = CLOCKS[+$('clockSpeed').value];
+  const dtM = dtReal * clock;
+  S.bunchSpeed = +$('bunchSpeed').value;
+  S.phi += dtReal * S.bunchSpeed;
+  S.tM += dtM; S.modeT += dtM;
+
+  switch (S.mode) {
+    case 'INJECTION PROBE BEAM':
+    case 'INJECTION PHYSICS BEAM':
+      updateInjection(dtM, dtReal); break;
+    case 'PREPARE RAMP':
+      if (S.modeT >= DUR.prep) { setMode('RAMP'); S.msg = 'Ramping: dipole current rising to ' + Math.round(I_DIP_7TEV * E_TOP / 7000) + ' A.'; }
+      break;
+    case 'RAMP':
+      S.E = E_INJ + (E_TOP - E_INJ) * smooth(S.modeT / DUR.ramp);
+      if (S.modeT >= DUR.ramp) { S.E = E_TOP; setMode('FLAT TOP'); S.msg = 'Flat top at ' + (E_TOP / 1000).toFixed(1) + ' TeV.'; }
+      break;
+    case 'FLAT TOP':
+      if (S.modeT >= DUR.flat && auto()) startSqueeze();
+      break;
+    case 'SQUEEZE': {
+      const target = +$('betaTarget').value;
+      const f = smooth(S.modeT / DUR.squeeze);
+      S.betaStar = Math.exp(Math.log(BETA_INJ) + (Math.log(target) - Math.log(BETA_INJ)) * f);
+      if (S.modeT >= DUR.squeeze) { S.betaStar = target; if (auto()) startCollide(); else S.msg = 'Squeeze complete. Ready to bring beams into collision.'; }
+      break;
+    }
+    case 'ADJUST':
+      S.collideFrac = smooth(S.modeT / DUR.adjust);
+      if (S.modeT >= DUR.adjust) { S.collideFrac = 1; setMode('STABLE BEAMS'); S.msg = 'Stable beams declared. Experiments taking data.'; }
+      break;
+    case 'STABLE BEAMS':
+      if (auto() && S.modeT >= DUR.autoDumpAfter) startDump();
+      break;
+    case 'BEAM DUMP': {
+      let alive = 0;
+      for (let i = 0; i < 2; i++) for (const b of S.beams[i]) {
+        if (b.state === 1 && S.phi >= b.phiOut) b.state = 3; // in the dump line
+        if (b.state === 3 && S.phi >= b.phiOut + 0.12) b.state = 2;
+        if (b.state === 1 || b.state === 3) alive++;
+      }
+      S.collideFrac = 0;
+      if (alive === 0) { setMode('RAMP DOWN'); S.msg = 'Ramping down and pre-cycling the magnets.'; }
+      break;
+    }
+    case 'RAMP DOWN':
+      S.E = E_INJ + (S.rampDownFrom - E_INJ) * (1 - smooth(S.modeT / DUR.rampdown));
+      if (S.modeT >= DUR.rampdown) {
+        S.beams = [[], []]; S.E = 0; S.betaStar = BETA_INJ; S.fill++; setMode('NO BEAM');
+        S.msg = 'Machine ready for fill ' + S.fill + '.';
+        if (auto()) startInject();
+      }
+      break;
+  }
+
+  // luminosity, burn-off, collisions
+  const nColl = Math.min(nb(0), nb(1));
+  const inCollision = (S.mode === 'ADJUST' || S.mode === 'STABLE BEAMS') && nColl > 0;
+  if (inCollision) {
+    const Nb = Math.max(0, (intensity(0) + intensity(1)) / (2 * nColl));
+    S.lumi = lumiAt(nColl, S.E, S.betaStar, Nb) * S.collideFrac;
+    const nIP = 2 + 0.1; // IP1 + IP5, plus LHCb at a tenth
+    const rate = S.lumi * SIG_INEL;                                   // inelastic per IP per second
+    S.coll += rate * nIP * dtM;
+    S.lint += S.lumi * dtM / 1e39;                                     // fb⁻¹
+    const burnPerBeam = SIG_TOT * S.lumi * nIP * dtM;                  // protons lost per beam
+    const perBunch = burnPerBeam / nColl;
+    const extra = Math.exp(-dtM / (40 * 3600));                        // residual lifetime 40 h
+    for (const bm of S.beams) for (const b of bm) if (b.state === 1) b.N = Math.max(0, b.N * extra - perBunch);
+  } else S.lumi = 0;
+
+  // collision flashes & event display cadence
+  if (S.lumi > 0 && !reduceMotion) {
+    const p = Math.min(1, 0.15 + S.lumi / 2e34);
+    for (const ip of [1, 5, 8, 2]) if (Math.random() < p * (ip === 1 || ip === 5 ? 0.35 : 0.08)) S.flashes.push({ ip, t: 0 });
+  }
+  for (const f of S.flashes) f.t += dtReal;
+  S.flashes = S.flashes.filter(f => f.t < 0.6);
+  S.evtTimer -= dtReal;
+  if (S.lumi > 0 && S.evtTimer <= 0) { S.lastEvt = makeEvent(); drawEvent(S.lastEvt); S.evtTimer = reduceMotion ? 4 : 1.6; }
+  if (S.lumi === 0 && S.lastEvt && S.mode !== 'STABLE BEAMS' && S.mode !== 'ADJUST') { S.lastEvt = null; drawEvent(null); }
+}
+
+/* ------------------------------------------------------------------ ring rendering */
+const ringC = $('ring'), rctx = ringC.getContext('2d');
+let W = 0, H = 0, DPR = 1, SCALE = 1, CX = 0, CY = 0;
+function resizeRing() {
+  const r = ringC.parentElement.getBoundingClientRect();
+  DPR = Math.min(2, devicePixelRatio || 1);
+  W = Math.max(1, Math.floor(r.width)); H = Math.max(1, Math.floor(r.height));
+  ringC.width = W * DPR; ringC.height = H * DPR;
+  SCALE = Math.min(W, H) * 0.385 / RING.R; CX = W / 2; CY = H / 2 - Math.min(W, H) * 0.012;
+}
+new ResizeObserver(resizeRing).observe(ringC.parentElement);
+const toPx = (x, y) => [CX + x * SCALE, CY + y * SCALE];
+function sprite(color) {
+  const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d');
+  const grd = g.createRadialGradient(8, 8, 0, 8, 8, 8);
+  grd.addColorStop(0, color); grd.addColorStop(0.35, color); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 16, 16); return c;
+}
+const SPR = [sprite('#4da8ff'), sprite('#ff5f52')];
+const SPR_HOT = [sprite('#9fd2ff'), sprite('#ffb0a8')];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const COL = { b1: css('--b1'), b2: css('--b2'), muted: css('--muted'), fg: css('--fg'), amber: css('--amber'), green: css('--green'), line: css('--line') };
+
+const POINTS = [
+  { n: 1, name: 'ATLAS', sub: '', exp: true, dx: 0, dy: 1 },
+  { n: 2, name: 'ALICE', sub: 'B1 injection', exp: true, dx: -1, dy: 1 },
+  { n: 3, name: 'Collimation', sub: 'momentum cleaning', exp: false, dx: 1, dy: 0 },
+  { n: 4, name: 'RF · 400 MHz', sub: '', exp: false, dx: -1, dy: -1 },
+  { n: 5, name: 'CMS', sub: '', exp: true, dx: 0, dy: -1 },
+  { n: 6, name: 'Beam dump', sub: '', exp: false, dx: 1, dy: -1 },
+  { n: 7, name: 'Collimation', sub: 'betatron cleaning', exp: false, dx: -1, dy: 0 },
+  { n: 8, name: 'LHCb', sub: 'B2 injection', exp: true, dx: 1, dy: 1 },
+];
+function bezier(p0, p1, p2, p3, t) {
+  const mt = 1 - t;
+  return [mt * mt * mt * p0[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t * t * t * p3[0],
+          mt * mt * mt * p0[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t * t * t * p3[1]];
+}
+function transferLine(beam) { // control points in metres, SPS → injection point
+  const uInj = beam === 0 ? U_IP(2) : U_IP(8);
+  const p = ringPos(uInj);
+  const ang = beam === 0 ? Math.PI * 0.95 : Math.PI * 0.05;
+  const p0 = [SPS.x + SPS.r * Math.cos(ang), SPS.y + SPS.r * Math.sin(ang)];
+  const dir = beam === 0 ? 1 : -1; // approach along the beam direction
+  const p3 = [p.x - p.tx * dir * 250, p.y - p.ty * dir * 250];
+  const p1 = [p0[0] + (beam === 0 ? -1200 : 1200), p0[1] + 300];
+  const p2 = [p3[0] - p.tx * dir * 1400, p3[1] - p.ty * dir * 1400];
+  return [p0, p1, p2, p3];
+}
+function dumpLine(beam) {
+  const p = ringPos(U_IP(6) + (beam === 0 ? -0.004 : 0.004));
+  const dir = beam === 0 ? 1 : -1;
+  return { x0: p.x, y0: p.y, x1: p.x + p.tx * dir * 800, y1: p.y + p.ty * dir * 800 };
+}
+
+function drawRing() {
+  const ctx = rctx; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const small = Math.min(W, H) < 520;
+  ctx.font = (small ? 9 : 11) + 'px ' + css('--font-mono');
+  ctx.textBaseline = 'middle';
+
+  /* injector complex */
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(131,145,170,.55)'; ctx.fillStyle = COL.muted;
+  const circ = (c) => { const [x, y] = toPx(c.x, c.y); ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, c.r * SCALE), 0, Math.PI * 2); ctx.stroke(); };
+  circ(SPS); circ(PS); circ(PSB);
+  { const [x1, y1] = toPx(LINAC4.x1, LINAC4.y1), [x2, y2] = toPx(LINAC4.x2, LINAC4.y2); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.setLineDash([3, 3]);
+  for (let b = 0; b < 2; b++) {
+    const cp = transferLine(b); ctx.beginPath();
+    for (let i = 0; i <= 40; i++) { const [x, y] = bezier(...cp, i / 40); const [px, py] = toPx(x, y); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+    ctx.strokeStyle = b === 0 ? 'rgba(77,168,255,.45)' : 'rgba(255,95,82,.45)'; ctx.stroke();
+  }
+  // PS → SPS and PSB → PS links
+  ctx.strokeStyle = 'rgba(131,145,170,.4)';
+  { const [x1, y1] = toPx(PS.x + PS.r, PS.y - PS.r * .3), [x2, y2] = toPx(SPS.x - SPS.r * .98, SPS.y + SPS.r * .25); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.setLineDash([]);
+  ctx.textAlign = 'left';
+  if (!small) {
+    let [x, y] = toPx(SPS.x, SPS.y); ctx.fillText('SPS · 6.9 km', x - 34, y);
+    [x, y] = toPx(PS.x, PS.y); ctx.fillText('PS', x + 10, y + 2);
+    ctx.fillText('PSB', x - 46, y - 14); ctx.fillText('Linac4', x - 118, y + 2);
+    [x, y] = toPx(...bezier(...transferLine(0), 0.5)); ctx.fillText('TI2', x - 6, y - 12);
+    [x, y] = toPx(...bezier(...transferLine(1), 0.5)); ctx.fillText('TI8', x - 6, y - 12);
+  }
+
+  /* dump lines */
+  for (let b = 0; b < 2; b++) {
+    const d = dumpLine(b); const [x0, y0] = toPx(d.x0, d.y0), [x1, y1] = toPx(d.x1, d.y1);
+    ctx.strokeStyle = b === 0 ? 'rgba(77,168,255,.4)' : 'rgba(255,95,82,.4)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.fillStyle = 'rgba(131,145,170,.9)'; ctx.fillRect(x1 - 3, y1 - 3, 6, 6);
+  }
+  if (!small) { const d = dumpLine(1); const [x, y] = toPx(d.x1, d.y1); ctx.fillStyle = COL.muted; ctx.fillText('TDE', x + 8, y); }
+
+  /* the ring: arcs tinted by dipole field, straights neutral */
+  const fieldFrac = Math.max(0, Math.min(1, (S.E - 0) / E_TOP));
+  const arcCol = `rgba(${Math.round(90 + 150 * fieldFrac)},${Math.round(100 + 70 * fieldFrac)},${Math.round(130 - 70 * fieldFrac)},${0.55 + 0.4 * fieldFrac})`;
+  ctx.lineWidth = small ? 2 : 3; ctx.lineCap = 'butt';
+  let segStart = 0;
+  for (let i = 1; i <= RING.M; i++) {
+    const cur = RING.pts[i % RING.M], prev = RING.pts[(i - 1) % RING.M];
+    if (cur.straight !== prev.straight || i === RING.M) {
+      ctx.beginPath();
+      for (let j = segStart; j <= i; j++) { const p = RING.pts[j % RING.M]; const [x, y] = toPx(p.x, p.y); j === segStart ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+      ctx.strokeStyle = prev.straight ? 'rgba(131,145,170,.5)' : arcCol; ctx.stroke();
+      segStart = i;
+    }
+  }
+
+  /* points */
+  for (const P of POINTS) {
+    const p = ringPos(U_IP(P.n)); const [x, y] = toPx(p.x, p.y);
+    const flashes = S.flashes.filter(f => f.ip === P.n);
+    if (P.exp) {
+      const sz = small ? 7 : 10;
+      ctx.fillStyle = '#0b1220'; ctx.strokeStyle = COL.fg; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.rect(x - sz / 2, y - sz / 2, sz, sz); ctx.fill(); ctx.stroke();
+      for (const f of flashes) {
+        const a = 1 - f.t / 0.6; ctx.strokeStyle = `rgba(241,180,60,${a})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, y, 4 + f.t * (small ? 28 : 44), 0, Math.PI * 2); ctx.stroke();
+      }
+    } else {
+      ctx.fillStyle = COL.muted; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+    const lx = x + P.dx * (small ? 14 : 20), ly = y + P.dy * (small ? 16 : 22) - (P.dy < 0 && P.sub && !small ? 13 : 0);
+    ctx.textAlign = P.dx < 0 ? 'right' : P.dx > 0 ? 'left' : 'center';
+    ctx.fillStyle = COL.fg; ctx.font = `600 ${small ? 10 : 12}px ${css('--font-mono')}`;
+    ctx.fillText('P' + P.n + (small ? '' : ' · ' + P.name), lx, ly);
+    if (!small && (P.sub || (P.n === 6))) { ctx.fillStyle = COL.muted; ctx.font = `10px ${css('--font-mono')}`; ctx.fillText(P.sub || 'B1 · B2 extraction', lx, ly + 13); }
+    ctx.font = (small ? 9 : 11) + 'px ' + css('--font-mono');
+  }
+
+  /* bunches */
+  ctx.globalCompositeOperation = 'lighter';
+  const sep = small ? 3.2 : 4.5;
+  const hot = S.E > 3000;
+  const sz = small ? 8 : 11;
+  const ringPx = C_RING * SCALE;
+  for (let i = 0; i < 2; i++) {
+    const spr = hot ? SPR_HOT[i] : SPR[i];
+    const overlap = S.beams[i].length * sz / ringPx;   // sprites stacked on one pixel of track
+    const dens = Math.min(1, 1.3 / Math.max(1, overlap));
+    for (const b of S.beams[i]) {
+      if (b.state !== 1) continue;
+      const u = bunchPosU(i, b.slot);
+      const p = ringPos(u); const side = sideFactor(u) * (i === 0 ? 1 : -1);
+      const nx = p.ty, ny = -p.tx;
+      const [x, y] = toPx(p.x, p.y);
+      ctx.globalAlpha = Math.min(1, 0.55 + 0.45 * b.N / N_B) * dens;
+      ctx.drawImage(spr, x + nx * sep * side - sz / 2, y + ny * sep * side - sz / 2, sz, sz);
+    }
+    // bunches in the dump line
+    const d = dumpLine(i);
+    for (const b of S.beams[i]) {
+      if (b.state !== 3) continue;
+      const t = Math.min(1, (S.phi - b.phiOut) / 0.12);
+      const [x, y] = toPx(d.x0 + (d.x1 - d.x0) * t, d.y0 + (d.y1 - d.y0) * t);
+      ctx.globalAlpha = (1 - t * 0.6) * dens; ctx.drawImage(SPR[i], x - sz / 2, y - sz / 2, sz, sz);
+    }
+  }
+  ctx.globalAlpha = 1;
+  /* trains in the transfer lines */
+  for (const t of S.trains) {
+    const cp = transferLine(t.beam);
+    const prog = Math.min(1, (S.phi - t.phi0) / (t.phi1 - t.phi0));
+    const n = t.probe ? 1 : 14;
+    for (let k = 0; k < n; k++) {
+      const tt = prog - k * 0.012 * (t.len * N_SLOTS / 300 + 0.3); if (tt < 0) continue;
+      const [x, y] = toPx(...bezier(...cp, Math.min(1, tt)));
+      ctx.globalAlpha = 1 - k / n * 0.8; ctx.drawImage(SPR_HOT[t.beam], x - 7, y - 7, 14, 14);
+    }
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+
+  /* scale bar, legend */
+  const km5 = 5000 * SCALE; const bx = 14, by = H - 18;
+  ctx.strokeStyle = COL.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + km5, by); ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 4); ctx.moveTo(bx + km5, by - 4); ctx.lineTo(bx + km5, by + 4); ctx.stroke();
+  ctx.fillStyle = COL.muted; ctx.textAlign = 'left'; ctx.fillText('5 km', bx + km5 + 8, by);
+  ctx.textAlign = 'right'; ctx.fillStyle = COL.b1; ctx.fillText('● B1 ↻', W - 14, H - 32); ctx.fillStyle = COL.b2; ctx.fillText('● B2 ↺', W - 14, H - 18);
+  if (!small) {
+    ctx.textAlign = 'left'; ctx.fillStyle = COL.muted;
+    ctx.fillText('Beam 1 → P2 → P3 … clockwise', 14, 18);
+    ctx.fillText('Beam 2 → P8 → P7 … counter-clockwise', 14, 32);
+  }
+}
+
+/* ------------------------------------------------------------------ event display */
+const evtC = $('evt'), ectx = evtC.getContext('2d');
+let EW = 0, EDPR = 1;
+function resizeEvt() {
+  const r = evtC.parentElement.getBoundingClientRect(); EDPR = Math.min(2, devicePixelRatio || 1);
+  EW = Math.max(1, Math.floor(r.width)); evtC.width = EW * EDPR; evtC.height = EW * EDPR; drawEvent(S.lastEvt);
+}
+new ResizeObserver(resizeEvt).observe(evtC.parentElement);
+const DET = { pipe: 0.03, trk: 1.15, ecal: [1.3, 1.75], hcal: [1.8, 2.95], coil: [2.95, 3.8], muon: [[4.0, 4.5], [5.0, 5.5], [6.0, 6.5], [6.9, 7.4]], rmax: 7.6 };
+const BZ = 3.8;
+function rexp(mean) { return -Math.log(1 - Math.random()) * mean; }
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+let evtCounter = 1;
+function makeEvent() {
+  const mu = S.lumi * SIG_INEL / Math.max(1, Math.min(nb(0), nb(1))) / F_REV;
+  const r = Math.random();
+  const type = r < 0.012 ? 'H→γγ' : r < 0.02 ? 'H→ZZ*→4μ' : r < 0.07 ? 'Z→μ⁺μ⁻' : r < 0.11 ? 'W→μν' : r < 0.25 ? 'dijet' : 'minimum bias';
+  const tracks = [], photons = [], jets = [], muons = [];
+  const addSoft = (n, dim) => { for (let i = 0; i < n; i++) tracks.push({ pt: 0.2 + rexp(0.6), phi: Math.random() * 2 * Math.PI, q: Math.random() < 0.5 ? 1 : -1, dim }); };
+  const addJet = (phi, E) => { jets.push({ phi, E }); const n = 6 + Math.floor(Math.random() * 10); for (let i = 0; i < n; i++) tracks.push({ pt: 1 + rexp(E / n * 0.5), phi: phi + gauss() * 0.12, q: Math.random() < 0.5 ? 1 : -1 }); };
+  addSoft(18 + Math.floor(Math.random() * 20), false);
+  const pile = Math.min(160, Math.round(mu * 5));
+  addSoft(pile, true);
+  if (type === 'dijet') { const phi = Math.random() * 2 * Math.PI, E = 60 + rexp(80); addJet(phi, E); addJet(phi + Math.PI + gauss() * 0.15, E * (0.8 + Math.random() * .3)); }
+  if (type === 'Z→μ⁺μ⁻') { const phi = Math.random() * 2 * Math.PI; muons.push({ pt: 30 + rexp(20), phi, q: 1 }, { pt: 30 + rexp(20), phi: phi + Math.PI + gauss() * 0.3, q: -1 }); }
+  if (type === 'W→μν') { muons.push({ pt: 35 + rexp(15), phi: Math.random() * 2 * Math.PI, q: Math.random() < 0.5 ? 1 : -1 }); }
+  if (type === 'H→γγ') { const phi = Math.random() * 2 * Math.PI; photons.push({ phi, E: 55 + rexp(20) }, { phi: phi + 2.2 + gauss() * 0.4, E: 45 + rexp(20) }); }
+  if (type === 'H→ZZ*→4μ') { const phi = Math.random() * 2 * Math.PI; for (let i = 0; i < 4; i++) muons.push({ pt: 12 + rexp(18), phi: phi + i * 1.4 + gauss() * 0.5, q: i % 2 ? 1 : -1 }); }
+  return { id: evtCounter++, type, tracks, photons, jets, muons, mu, E: S.E };
+}
+function drawEvent(ev) {
+  const ctx = ectx; ctx.setTransform(EDPR, 0, 0, EDPR, 0, 0); ctx.clearRect(0, 0, EW, EW);
+  const c = EW / 2, k = (EW / 2 - 6) / DET.rmax; // px per metre
+  const ring = (r0, r1, fill) => { ctx.beginPath(); ctx.arc(c, c, r1 * k, 0, Math.PI * 2); ctx.arc(c, c, r0 * k, 0, Math.PI * 2, true); ctx.fillStyle = fill; ctx.fill(); };
+  // detector
+  ring(DET.ecal[0], DET.ecal[1], 'rgba(61,220,138,.10)');
+  ring(DET.hcal[0], DET.hcal[1], 'rgba(241,180,60,.10)');
+  ring(DET.coil[0], DET.coil[1], 'rgba(131,145,170,.16)');
+  for (const m of DET.muon) ring(m[0], m[1], 'rgba(255,95,82,.09)');
+  ctx.strokeStyle = 'rgba(131,145,170,.35)'; ctx.lineWidth = 0.6;
+  for (const r of [0.044, 0.073, 0.102, 0.25, 0.34, 0.43, 0.52, 0.61, 0.70, 0.78, 0.87, 0.96, 1.08]) { ctx.beginPath(); ctx.arc(c, c, r * k, 0, Math.PI * 2); ctx.stroke(); }
+  // segment ticks on calorimeters
+  ctx.strokeStyle = 'rgba(131,145,170,.18)';
+  for (let i = 0; i < 72; i++) { const a = i / 72 * 2 * Math.PI; ctx.beginPath(); ctx.moveTo(c + Math.cos(a) * DET.ecal[0] * k, c + Math.sin(a) * DET.ecal[0] * k); ctx.lineTo(c + Math.cos(a) * DET.hcal[1] * k, c + Math.sin(a) * DET.hcal[1] * k); ctx.stroke(); }
+  ctx.font = '9px ' + css('--font-mono'); ctx.fillStyle = COL.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  const lab = (txt, r) => ctx.fillText(txt, c + 4, c - r * k);
+  if (EW > 260) { lab('tracker', 0.9); lab('ECAL', (DET.ecal[0] + DET.ecal[1]) / 2); lab('HCAL', (DET.hcal[0] + DET.hcal[1]) / 2); lab('solenoid', (DET.coil[0] + DET.coil[1]) / 2); lab('muon chambers', 5.25); }
+  ctx.textAlign = 'right'; ctx.fillText('1 m', c - 2, c - 1.0 * k - 8);
+  ctx.beginPath(); ctx.moveTo(c - 1.0 * k, c - 1.0 * k); ctx.lineTo(c, c - 1.0 * k); ctx.strokeStyle = COL.muted; ctx.lineWidth = 1; ctx.stroke();
+
+  if (!ev) {
+    ctx.textAlign = 'center'; ctx.font = '600 13px ' + css('--font-mono'); ctx.fillStyle = COL.muted;
+    ctx.fillText('waiting for collisions', c, EW - 16);
+    $('evtTitle').textContent = 'No collisions'; $('evtTag').textContent = '';
+    $('evtInfo').textContent = S.lastEvt === null && evtCounter > 1 ? 'Beams out of collision. Displayed events this session: ' + (evtCounter - 1).toLocaleString() + '.' : 'Collisions begin during Adjust; data-taking is declared at Stable Beams.';
+    return;
+  }
+  const trackPath = (pt, phi, q, rStop, color, width, alpha) => {
+    const R = pt / (0.3 * BZ);
+    const nx = -q * Math.sin(phi), ny = q * Math.cos(phi);
+    const cx = R * nx, cy = R * ny, a0 = Math.atan2(-ny, -nx);
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = alpha;
+    let first = true; const maxTh = 2 * R < rStop ? Math.PI * 2.6 : Math.PI;
+    for (let th = 0; th <= maxTh; th += 0.03) {
+      const a = a0 + q * th; const x = cx + R * Math.cos(a), y = cy + R * Math.sin(a);
+      if (Math.hypot(x, y) > rStop) { ctx.lineTo(c + x * k, c - y * k); break; }
+      first ? ctx.moveTo(c + x * k, c - y * k) : ctx.lineTo(c + x * k, c - y * k); first = false;
+    }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  const tower = (phi, E, r0, color, scale) => {
+    const h = Math.min(0.9, Math.log10(1 + E) * scale), w = 0.07;
+    ctx.fillStyle = color; ctx.beginPath();
+    const rr = r0 + h;
+    ctx.moveTo(c + Math.cos(phi - w) * r0 * k, c - Math.sin(phi - w) * r0 * k);
+    ctx.lineTo(c + Math.cos(phi - w) * rr * k, c - Math.sin(phi - w) * rr * k);
+    ctx.lineTo(c + Math.cos(phi + w) * rr * k, c - Math.sin(phi + w) * rr * k);
+    ctx.lineTo(c + Math.cos(phi + w) * r0 * k, c - Math.sin(phi + w) * r0 * k);
+    ctx.closePath(); ctx.fill();
+  };
+  for (const t of ev.tracks) if (t.dim) trackPath(t.pt, t.phi, t.q, DET.trk, '#7f8ca3', 0.6, 0.28);
+  for (const t of ev.tracks) if (!t.dim) {
+    trackPath(t.pt, t.phi, t.q, DET.trk, '#e8d27a', 0.9, 0.85);
+    if (t.pt > 1.5) { tower(t.phi, t.pt * 0.6, DET.ecal[0], 'rgba(61,220,138,.75)', 0.18); tower(t.phi, t.pt, DET.hcal[0], 'rgba(241,180,60,.8)', 0.35); }
+  }
+  for (const j of ev.jets) { tower(j.phi, j.E, DET.ecal[0], 'rgba(61,220,138,.85)', 0.2); tower(j.phi, j.E * 1.5, DET.hcal[0], 'rgba(241,180,60,.9)', 0.45); }
+  for (const g of ev.photons) { tower(g.phi, g.E * 3, DET.ecal[0], 'rgba(61,220,138,1)', 0.22); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(61,220,138,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(c, c); ctx.lineTo(c + Math.cos(g.phi) * DET.ecal[0] * k, c - Math.sin(g.phi) * DET.ecal[0] * k); ctx.stroke(); ctx.setLineDash([]); }
+  for (const m of ev.muons) { trackPath(m.pt, m.phi, m.q, DET.coil[0], '#ff5f52', 1.6, 1); trackPath(m.pt * 2.2, m.phi, -m.q, DET.rmax, '#ff5f52', 1.6, 0.95); }
+  // vertex
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(c, c, 1.6, 0, Math.PI * 2); ctx.fill();
+
+  $('evtTitle').textContent = `Event ${ev.id.toLocaleString()} · √s = ${(2 * ev.E / 1000).toFixed(1)} TeV`;
+  $('evtTag').textContent = ev.type === 'minimum bias' ? '' : 'candidate: ' + ev.type;
+  const nTr = ev.tracks.filter(t => !t.dim).length;
+  $('evtInfo').textContent = `${nTr} charged tracks from the hard vertex, ⟨μ⟩ = ${ev.mu.toFixed(1)} pile-up interactions (${ev.tracks.filter(t => t.dim).length} soft tracks shown dim)` +
+    (ev.muons.length ? `, ${ev.muons.length} muon${ev.muons.length > 1 ? 's' : ''}` : '') + (ev.photons.length ? ', 2 photons in ECAL' : '') + (ev.jets.length ? ', 2 jets' : '') + '.';
+}
+
+/* ------------------------------------------------------------------ readouts */
+const fmtE = E => E >= 1000 ? (E / 1000).toFixed(E >= 6790 ? 1 : 2) + ' TeV' : Math.round(E) + ' GeV';
+const sci = (x, d = 2) => { if (!x) return '0'; const e = Math.floor(Math.log10(x)); return (x / 10 ** e).toFixed(d) + 'e' + (e >= 0 ? '+' : '') + e; };
+const sciHtml = (x, d = 2) => { if (!x) return '0'; const e = Math.floor(Math.log10(x)); return (x / 10 ** e).toFixed(d) + ' × 10<sup>' + e + '</sup>'; };
+const hms = s => { s = Math.floor(s); return [s / 3600, s / 60 % 60, s % 60].map(v => String(Math.floor(v)).padStart(2, '0')).join(':'); };
+const grp = n => n.toLocaleString('en-US').replace(/,/g, ' ');
+const TONE = { 'NO BEAM': 'none', 'INJECTION PROBE BEAM': 'inject', 'INJECTION PHYSICS BEAM': 'inject', 'PREPARE RAMP': 'ramp', 'RAMP': 'ramp', 'FLAT TOP': 'ramp', 'SQUEEZE': 'ramp', 'ADJUST': 'ramp', 'STABLE BEAMS': 'stable', 'BEAM DUMP': 'dump', 'RAMP DOWN': 'none' };
+const CYCLE_ORDER = ['INJECTION', 'PREPARE RAMP', 'RAMP', 'FLAT TOP', 'SQUEEZE', 'ADJUST', 'STABLE BEAMS', 'BEAM DUMP', 'RAMP DOWN'];
+let uiTick = 0;
+function readouts() {
+  if ((uiTick++ % 4) !== 0) return;
+  const E = S.E, g = E > 0 ? gammaOf(E) : 0;
+  const hasBeam = nb(0) + nb(1) > 0;
+  $('hdrE').textContent = fmtE(E);
+  $('hdrI1').textContent = sci(intensity(0)); $('hdrI2').textContent = sci(intensity(1));
+  $('hdrClock').textContent = hms(S.tM); $('fillNo').textContent = grp(S.fill);
+  const mb = $('modeBox'); if (mb.textContent !== S.mode) mb.textContent = S.mode; mb.dataset.tone = TONE[S.mode];
+  $('turnNo').textContent = grp(Math.floor(S.phi));
+  $('nb1').textContent = nb(0); $('nb2').textContent = nb(1);
+  $('slowFactor').textContent = '×' + grp(Math.round(F_REV / S.bunchSpeed));
+  $('stageMsg').textContent = S.msg;
+
+  $('pE').innerHTML = E ? (E >= 1000 ? (E / 1000).toFixed(3) + ' <span class="u">TeV</span>' : Math.round(E) + ' <span class="u">GeV</span>') : '0 <span class="u">GeV</span>';
+  $('pGamma').textContent = g ? grp(Math.round(g)) : '–';
+  $('pBeta').textContent = g ? (100 * (1 - 1 / (2 * g * g))).toFixed(7) + ' % c' : '–';
+  $('pB').innerHTML = (E / (0.299792458 * RHO)).toFixed(2) + ' <span class="u">T</span>';
+  $('pI').innerHTML = grp(Math.round(I_DIP_7TEV * E / 7000)) + ' <span class="u">A</span>';
+  $('pBeta*').innerHTML = S.betaStar.toFixed(2) + ' <span class="u">m</span>';
+  $('pSig').innerHTML = g ? (Math.sqrt(EPS_N * S.betaStar / g) * 1e6).toFixed(1) + ' <span class="u">µm</span>' : '–';
+  const stored = hasBeam ? Math.max(intensity(0), intensity(1)) * E * 1e9 * EV_J / 1e6 : 0;
+  $('pStored').innerHTML = stored.toFixed(stored < 10 ? 2 : 0) + ' <span class="u">MJ</span>';
+  const n0 = nb(0); $('pNb').innerHTML = n0 ? sciHtml(intensity(0) / n0) : '–';
+  $('pLumi').innerHTML = S.lumi ? sciHtml(S.lumi) + ' <span class="u">cm⁻²s⁻¹</span>' : '0 <span class="u">cm⁻²s⁻¹</span>';
+  const mu = S.lumi ? S.lumi * SIG_INEL / Math.max(1, Math.min(nb(0), nb(1))) / F_REV : 0;
+  $('pMu').textContent = mu.toFixed(1);
+  $('pLint').innerHTML = S.lint.toFixed(3) + ' <span class="u">fb⁻¹</span>';
+  $('pColl').innerHTML = S.coll ? sciHtml(S.coll) : '0';
+
+  // buttons
+  $('btnInject').disabled = S.mode !== 'NO BEAM';
+  $('btnRamp').disabled = !(S.mode === 'INJECTION PHYSICS BEAM' && S.fillingDone);
+  $('btnSqueeze').disabled = S.mode !== 'FLAT TOP';
+  $('btnCollide').disabled = !(S.mode === 'SQUEEZE' && S.modeT >= DUR.squeeze);
+  $('btnDump').disabled = ['NO BEAM', 'BEAM DUMP', 'RAMP DOWN'].includes(S.mode);
+  $('scheme').disabled = S.mode !== 'NO BEAM';
+  $('betaTarget').disabled = !['NO BEAM', 'INJECTION PROBE BEAM', 'INJECTION PHYSICS BEAM', 'PREPARE RAMP', 'RAMP', 'FLAT TOP'].includes(S.mode);
+  // cycle ladder
+  const curKey = S.mode.startsWith('INJECTION') ? 'INJECTION' : S.mode;
+  const idx = CYCLE_ORDER.indexOf(curKey);
+  for (const li of $('cycle').children) {
+    const i = CYCLE_ORDER.indexOf(li.dataset.m);
+    li.className = idx < 0 ? '' : i < idx ? 'done' : i === idx ? 'now' + (curKey === 'STABLE BEAMS' ? ' stable' : curKey === 'BEAM DUMP' ? ' dump' : '') : '';
+  }
+}
+
+/* ------------------------------------------------------------------ wiring */
+$('btnInject').addEventListener('click', startInject);
+$('btnRamp').addEventListener('click', startRamp);
+$('btnSqueeze').addEventListener('click', startSqueeze);
+$('btnCollide').addEventListener('click', startCollide);
+$('btnDump').addEventListener('click', startDump);
+$('btnReset').addEventListener('click', () => { reset(true); drawEvent(null); });
+$('clockSpeed').addEventListener('input', () => { $('clockSpeedVal').textContent = '×' + CLOCKS[+$('clockSpeed').value]; });
+$('bunchSpeed').addEventListener('input', () => { $('bunchSpeedVal').textContent = (+$('bunchSpeed').value).toFixed(2) + ' turn/s'; });
+if (reduceMotion) { $('bunchSpeed').value = 0.05; $('bunchSpeedVal').textContent = '0.05 turn/s'; }
+S.bunchSpeed = +$('bunchSpeed').value;
+
+let paused = false;
+$('btnPause').addEventListener('click', () => {
+  paused = !paused;
+  $('btnPause').setAttribute('aria-pressed', String(paused));
+  $('btnPause').textContent = paused ? 'Resume simulation' : 'Pause simulation';
+});
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!paused) update(dt);
+  drawRing(); readouts();
+  requestAnimationFrame(frame);
+}
+resizeRing(); resizeEvt(); drawEvent(null);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
