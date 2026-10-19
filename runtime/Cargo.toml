@@ -1,0 +1,9 @@
+[package]
+name = "lhc-runtime"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+license = "Apache-2.0"
+description = "Deterministic CPU-only educational beam-cycle runtime"
+
+[dependencies]

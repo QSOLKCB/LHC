@@ -1,0 +1,33 @@
+{
+  "schema": "lhc-cpu-verification-v1",
+  "date_utc": "2026-10-19",
+  "base_commit": "13104f1062b607fd6415f4abbfd3ad140612746a",
+  "toolchain": "rustc 1.90.0 (1159e78c4 2025-09-14)",
+  "target": "x86_64-unknown-linux-gnu",
+  "results": {
+    "rust_tests": 22,
+    "node_tests": 8,
+    "rustfmt": "pass",
+    "clippy_warnings_denied": "pass",
+    "release_full_state_replay": "pass",
+    "single_fill_worker_parity": "pass",
+    "independent_scenario_worker_parity": "pass"
+  },
+  "scope": "Synthetic software conformance only. No scientific validation, cryptographic authenticity, portable speedup, or cross-platform float identity claim. Historical record: preserve it when adding later evidence.",
+  "sha256": {
+    "Cargo.toml": "630e2c4d08521765a4da7d6d51786c31224fcf7f0f1764f0205f811f37393496",
+    "Cargo.lock": "c8275be0b0948de1b27c9e31765907ef63d3bc5f3f9dbf74e8c0b629f968c3a2",
+    "rust-toolchain.toml": "5597a94fc41b6f56313d195195fbeb63df9eb694cfe9fa5d0a8011c999e335ed",
+    "runtime/Cargo.toml": "ae301ccd8714d8f3cfbb063e2838ac9c25b1ad902a279cb3dfc4caad11784452",
+    "runtime/src/lib.rs": "73d1f735baea98305784c69aeebd5a68e20f8e25bd27e2dd3a0465254b092f00",
+    "runtime/src/main.rs": "2667f6141b7eafe21ee7cda296a40f4bf97b1cce4f3d6b40eaeeb71b46ebb6b4",
+    "runtime/tests/cli.rs": "e52d78f18b1402e1cd3e055979c45fe19fa411128c46499f82509441de7bc801",
+    "index.html": "72f4b55f8b1bdb6b11af730fec36c8793694b8360acbb09ae782976d679e85db",
+    "tests/simulator.test.cjs": "297a630e425e850faad64b98c367a2df49a5e9644a8970a52bdae6779ef88638",
+    ".github/workflows/runtime.yml": "4578ab654e8f06ea6349a89a777a79108175015f504a415d4d35d1a61bf3119d",
+    "tests/fixtures/cpu-v1/fill-12.receipt": "b6a6b81094de6ed0652cebe02e8b7ced4588067c2ea139c756f5f1cdf7748dd9",
+    "tests/fixtures/cpu-v1/benchmark.txt": "a1c4d7b6175f3681596cdca2ccdd225656b34f47949aea640e2178151791752a",
+    "tests/fixtures/cpu-v1/checks.txt": "eb3dd013d8f68d99fb53c2fae3e5ca6a97dc6968dd7eb5be4c3177cedecd7964",
+    "tests/fixtures/cpu-v1/benchmark-review-rerun.txt": "702dadb605f3ed12708cf8bd55841e5a9e30e373af5d3157a8e429d076d42bca"
+  }
+}

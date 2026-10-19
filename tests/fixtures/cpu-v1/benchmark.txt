@@ -1,0 +1,10 @@
+lhc-benchmark-v1
+arch=x86_64 os=linux
+bunches=2808 steps=128 samples=7 warmups=1
+requested_workers=4 effective_workers=4
+scalar_median_ns=4288475 parallel_median_ns=121825855
+full_state_parity=pass
+No universal speedup claim; timing includes scoped-thread overhead.
+scenario_jobs=16 scenario_workers=4 steps_per_job=128
+scenario_serial_median_ns=46892862 scenario_parallel_median_ns=11116050
+scenario_full_state_parity=pass
