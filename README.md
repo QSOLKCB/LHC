@@ -4,7 +4,8 @@
 
 An interactive, educational illustration of the Large Hadron Collider beam cycle.
 The supplied Fable design is kept as a single HTML file with embedded CSS and
-JavaScript: no build step, runtime dependencies, or Rust runtime yet.
+JavaScript: no build step or runtime dependencies. A separate, CPU-only Rust
+library and CLI now provide reproducible headless educational beam cycles.
 
 ## Run
 
@@ -30,7 +31,24 @@ can slow it relative to wall time.
   shapes are illustrative, not a conservation-constrained collision generator.
   In particular, the displayed Higgs/W/Z candidate frequency is not a prediction.
 - This is not a validated accelerator simulation, an operational control system,
-  or a source of measured physics results. A future Rust model is separate work.
+  or a source of measured physics results. The native runtime has the same
+  educational scope, with explicitly simplified injection/dump scheduling.
+
+## CPU-only Rust runtime
+
+See [the runtime contract, replay format, limits and benchmark procedure](docs/CPU-RUNTIME.md).
+No CUDA, GPU, network service, or third-party Rust dependencies are used.
+The native runner does not replace or drive the browser UI in this PR.
+
+```sh
+cargo run --release --locked -- run --bunches 2808 --steps 5000 > fill.receipt
+cargo run --release --locked -- replay fill.receipt
+cargo run --release --locked -- bench
+```
+
+Scalar is the default. `--workers 4` explicitly enables bounded scoped CPU
+workers for independent per-bunch burn-off. Measure locally: thread overhead can
+make this small workload slower. No universal speedup is claimed.
 
 ## Tests
 
@@ -68,3 +86,4 @@ The original control-room artwork and single-file structure are preserved.
 Integration changes fix sequencer resumption, clarify illustrative event/clock
 semantics, add a pause control and polite machine-status announcements, and add
 repository tests/deployment. The repository's existing LICENSE is retained.
+

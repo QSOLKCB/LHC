@@ -1,0 +1,7 @@
+Independent review rerun on same shared executor and source, 2026-10-19.
+Both full-state parity gates passed.
+Per-tick scalar_median_ns=1314471 parallel_median_ns=227530771
+Independent scenarios serial_median_ns=23796518 parallel_median_ns=23654161
+scenario_workers=4
+This rerun did not reproduce the earlier coarse-scenario speedup.
+Shared-host timing variability is substantial; there is no reliable gain claim.

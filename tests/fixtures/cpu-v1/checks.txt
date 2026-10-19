@@ -1,0 +1,68 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+   Compiling lhc-runtime v0.1.0 (<checkout>/runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.28s
+     Running unittests src/lib.rs (target/debug/deps/lhc_runtime-cb31c7a7f1bbf646)
+
+running 18 tests
+test tests::burn_off_clamps_and_never_creates_intensity ... ok
+test tests::clock_overflow_is_atomic_and_pause_remains_safe ... ok
+test tests::early_dump_cancels_injection_and_uses_current_energy ... ok
+test tests::dump_clears_beams_and_retains_integrated_counts_until_next_fill ... ok
+test tests::fractional_tick_preserves_transition_remainder ... ok
+test tests::illegal_commands_are_atomic ... ok
+test tests::hidden_state_and_configuration_are_in_canonical_encoding ... ok
+test tests::pause_freezes_every_bit_and_reset_is_exact ... ok
+test tests::ramp_and_squeeze_are_monotonic_and_hit_endpoints ... ok
+test tests::manual_controls_enforce_ready_boundaries ... ok
+test tests::worker_count_is_bounded ... ok
+test tests::rejects_invalid_configuration ... ok
+test tests::source_javascript_luminosity_vector_conforms ... ok
+test tests::forced_partition_kernel_matches_scalar_on_uneven_slices ... ok
+test tests::independent_runs_have_identical_full_state ... ok
+test tests::enabling_auto_after_a_long_manual_hold_transitions_without_underflow ... ok
+test tests::automatic_cycle_is_bounded_and_restarts ... ok
+test tests::parallel_and_scalar_match_every_array_bit_with_tails ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running unittests src/main.rs (target/debug/deps/lhc_runtime-96da9ba264a67f64)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli.rs (target/debug/deps/cli-29e1abbbd4303915)
+
+running 4 tests
+test empty_script_round_trips ... ok
+test reproducible_receipt_and_tamper_rejection ... ok
+test malformed_and_unbounded_inputs_fail ... ok
+test scripts_validate_order_and_replay_controls ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+   Doc-tests lhc_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+✔ filling schemes have exact unique in-range slots and abort clearance (37.824036ms)
+✔ all schemes reach stable beams and accumulate finite luminosity (294.949618ms)
+✔ manual cycle gates stages and dump returns to no beam (94.837878ms)
+✔ interrupted injection dumps pending beams safely; reset permits a new fill (69.486952ms)
+✔ luminosity zero/no-beam and intensity-squared scaling (19.700609ms)
+✔ single-file site has no local asset dependencies or executable external scripts (1.760614ms)
+✔ enabling sequencer after manual filling resumes the cycle (401.578001ms)
+✔ pause freezes time; resume and reset controls remain usable (27.777738ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1302.935865
+    Finished `release` profile [optimized] target(s) in 0.00s
+     Running `target/release/lhc-runtime replay tests/fixtures/cpu-v1/fill-12.receipt`
+replay verified: full canonical state matches
